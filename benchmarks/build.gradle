@@ -1,0 +1,116 @@
+plugins {
+    id 'java'
+    id 'me.champeau.jmh' version '0.7.3'
+    id 'com.google.protobuf' version '0.9.4'
+}
+
+group = 'io.opentdf.platform'
+version = '0.12.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Include fory-serialization sources directly
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java', '../fory-serialization/src/main/java',
+                       "${buildDir}/generated/source/proto/main/java"]
+        }
+        proto {
+            srcDirs = ['src/main/proto']
+        }
+    }
+    jmh {
+        java {
+            srcDirs = ['src/jmh/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+// Ensure proto generation happens before Java compilation
+tasks.named('compileJava') {
+    dependsOn 'generateProto'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:4.29.2'
+    }
+    generateProtoTasks {
+        all().configureEach { task ->
+            task.builtins {
+                java {}
+            }
+        }
+    }
+}
+
+dependencies {
+    // Protobuf for comparison benchmarks
+    implementation 'com.google.protobuf:protobuf-java:4.29.2'
+
+    // JMH
+    jmh 'org.openjdk.jmh:jmh-core:1.37'
+    jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+
+    // Apache Fory
+    implementation 'org.apache.fory:fory-core:0.15.0'
+
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+jmh {
+    warmupIterations = 5
+    iterations = 10
+    fork = 2
+    threads = 1
+    resultFormat = 'JSON'
+    benchmarkMode = ['thrpt', 'avgt']
+    timeUnit = 'us'
+    profilers = ['gc']
+    includeTests = false
+
+    // JVM arguments for benchmarking
+    jvmArgs = ['-Xmx2g', '-XX:+UseG1GC']
+}
+
+// Quick benchmark configuration (use ./gradlew jmh -Pquick)
+if (project.hasProperty('quick')) {
+    jmh {
+        warmupIterations = 2
+        iterations = 3
+        fork = 1
+        threads = 1
+        benchmarkMode = ['thrpt']
+        profilers = []  // Disable profilers for quick runs
+    }
+}
+
+// Head-to-head benchmark only (use ./gradlew jmh -Pheadtohead)
+if (project.hasProperty('headtohead')) {
+    jmh {
+        warmupIterations = 3
+        iterations = 5
+        fork = 1
+        threads = 1
+        benchmarkMode = ['thrpt']
+        profilers = ['gc']  // Enable GC allocation profiling
+        includes = ['ForyVsProtobufBenchmark']
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

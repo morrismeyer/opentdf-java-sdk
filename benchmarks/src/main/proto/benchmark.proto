@@ -1,0 +1,200 @@
+syntax = "proto3";
+
+package opentdf.benchmarks;
+
+option java_package = "io.opentdf.benchmarks.proto";
+option java_outer_classname = "BenchmarkProtos";
+option java_multiple_files = true;
+
+// === KAS Messages ===
+
+message PolicyBindingProto {
+  string algorithm = 1;
+  string hash = 2;
+}
+
+message KeyAccessProto {
+  string encrypted_metadata = 1;
+  PolicyBindingProto policy_binding = 2;
+  string protocol = 3;
+  string key_type = 4;
+  string kas_url = 5;
+  string kid = 6;
+  string split_id = 7;
+  bytes wrapped_key = 8;
+  bytes header = 9;
+  string ephemeral_public_key = 10;
+}
+
+message WithPolicyProto {
+  string id = 1;
+  string body = 2;
+}
+
+message WithKeyAccessObjectProto {
+  string key_access_object_id = 1;
+  KeyAccessProto key_access_object = 2;
+}
+
+message WithPolicyRequestProto {
+  repeated WithKeyAccessObjectProto key_access_objects = 1;
+  WithPolicyProto policy = 2;
+  string algorithm = 3;
+}
+
+message UnsignedRewrapRequestProto {
+  string client_public_key = 1;
+  repeated WithPolicyRequestProto requests = 2;
+}
+
+message KeyAccessRewrapResultProto {
+  string key_access_object_id = 1;
+  string status = 2;
+  oneof result {
+    bytes kas_wrapped_key = 3;
+    string error = 4;
+  }
+}
+
+message PolicyRewrapResultProto {
+  string policy_id = 1;
+  repeated KeyAccessRewrapResultProto results = 2;
+}
+
+message RewrapResponseProto {
+  string session_public_key = 1;
+  repeated PolicyRewrapResultProto responses = 2;
+}
+
+message PublicKeyResponseProto {
+  string public_key = 1;
+  string kid = 2;
+}
+
+// === Authorization Messages ===
+
+message ActionProto {
+  oneof action {
+    StandardAction standard = 1;
+    string custom = 2;
+  }
+
+  enum StandardAction {
+    STANDARD_ACTION_UNSPECIFIED = 0;
+    STANDARD_ACTION_DECRYPT = 1;
+    STANDARD_ACTION_TRANSMIT = 2;
+  }
+}
+
+message EntityProto {
+  string id = 1;
+  oneof entity_type {
+    string email_address = 2;
+    string user_name = 3;
+    string remote_claims_url = 4;
+    string uuid = 5;
+    string client_id = 6;
+  }
+  Category category = 7;
+
+  enum Category {
+    CATEGORY_UNSPECIFIED = 0;
+    CATEGORY_SUBJECT = 1;
+    CATEGORY_ENVIRONMENT = 2;
+  }
+}
+
+message EntityChainProto {
+  string id = 1;
+  repeated EntityProto entities = 2;
+}
+
+message TokenProto {
+  string id = 1;
+  string jwt = 2;
+}
+
+message ResourceAttributeProto {
+  string resource_attributes_id = 1;
+  repeated string attribute_value_fqns = 2;
+}
+
+message DecisionRequestProto {
+  repeated ActionProto actions = 1;
+  repeated EntityChainProto entity_chains = 2;
+  repeated ResourceAttributeProto resource_attributes = 3;
+}
+
+message DecisionResponseProto {
+  string entity_chain_id = 1;
+  string resource_attributes_id = 2;
+  ActionProto action = 3;
+  Decision decision = 4;
+  repeated string obligations = 5;
+
+  enum Decision {
+    DECISION_UNSPECIFIED = 0;
+    DECISION_DENY = 1;
+    DECISION_PERMIT = 2;
+  }
+}
+
+message EntityEntitlementsProto {
+  string entity_id = 1;
+  repeated string attribute_value_fqns = 2;
+}
+
+message EntitlementsResponseProto {
+  repeated EntityEntitlementsProto entitlements = 1;
+}
+
+// === Policy Messages ===
+
+message NamespaceProto {
+  string id = 1;
+  string name = 2;
+  string fqn = 3;
+  bool active = 4;
+}
+
+message ValueProto {
+  string id = 1;
+  string value = 2;
+  string fqn = 3;
+  bool active = 4;
+}
+
+message AttributeProto {
+  string id = 1;
+  string namespace_id = 2;
+  string name = 3;
+  RuleType rule = 4;
+  repeated ValueProto values = 5;
+  string fqn = 6;
+  bool active = 7;
+
+  enum RuleType {
+    RULE_TYPE_UNSPECIFIED = 0;
+    RULE_TYPE_ALL_OF = 1;
+    RULE_TYPE_ANY_OF = 2;
+    RULE_TYPE_HIERARCHY = 3;
+  }
+}
+
+message SimpleKasPublicKeyProto {
+  string pem = 1;
+  string kid = 2;
+  Algorithm algorithm = 3;
+
+  enum Algorithm {
+    ALGORITHM_UNSPECIFIED = 0;
+    ALGORITHM_RSA_2048 = 1;
+    ALGORITHM_EC_SECP256R1 = 2;
+  }
+}
+
+message SimpleKasKeyProto {
+  string kas_id = 1;
+  string kas_uri = 2;
+  repeated SimpleKasPublicKeyProto public_keys = 3;
+}

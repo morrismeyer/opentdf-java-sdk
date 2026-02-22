@@ -1,0 +1,11 @@
+# Gradle
+.gradle/
+build/
+gradle-9.3.1/
+
+# IDE
+.idea/
+*.iml
+
+# JMH
+*.log
