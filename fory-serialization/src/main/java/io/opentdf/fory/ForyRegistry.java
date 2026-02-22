@@ -1,6 +1,7 @@
 package io.opentdf.fory;
 
 import io.opentdf.fory.dto.*;
+import org.apache.fory.Fory;
 import org.apache.fory.ThreadSafeFory;
 
 /**
@@ -19,45 +20,55 @@ public final class ForyRegistry {
      * @param fory the ThreadSafeFory instance to register types with
      */
     public static void registerTypes(ThreadSafeFory fory) {
-        // Core DTOs (register arrays explicitly for better performance)
-        fory.register(PolicyBindingDto.class);
-        fory.register(KeyAccessDto.class);
-        fory.register(EntityDto.class);
-        fory.register(EntityDto[].class);  // Explicit array registration for EntityChain
-        fory.register(EntityDto.EntityType.class);
-        fory.register(EntityDto.Category.class);
-        fory.register(EntityChainDto.class);
-        fory.register(TokenDto.class);
+        // Use registerCallback to register types with the underlying Fory instance
+        fory.registerCallback(ForyRegistry::registerTypesOnFory);
+    }
+
+    /**
+     * Registers types on the underlying Fory instance.
+     */
+    private static void registerTypesOnFory(Fory f) {
+        // For cross-language mode, we need to register with explicit type names
+        // that match the Go registration
+        f.register(EntityDto.EntityType.class, "io.opentdf.fory.dto.EntityDto$EntityType");
+        f.register(EntityDto.Category.class, "io.opentdf.fory.dto.EntityDto$Category");
+        f.register(ActionDto.StandardAction.class, "io.opentdf.fory.dto.ActionDto$StandardAction");
+        f.register(DecisionResponseDto.Decision.class, "io.opentdf.fory.dto.DecisionResponseDto$Decision");
+        f.register(AttributeDto.RuleType.class, "io.opentdf.fory.dto.AttributeDto$RuleType");
+        f.register(SimpleKasKeyDto.Algorithm.class, "io.opentdf.fory.dto.SimpleKasKeyDto$Algorithm");
+
+        // Core DTOs
+        f.register(PolicyBindingDto.class, "io.opentdf.fory.dto.PolicyBindingDto");
+        f.register(KeyAccessDto.class, "io.opentdf.fory.dto.KeyAccessDto");
+        f.register(EntityDto.class, "io.opentdf.fory.dto.EntityDto");
+        f.register(EntityChainDto.class, "io.opentdf.fory.dto.EntityChainDto");
+        f.register(TokenDto.class, "io.opentdf.fory.dto.TokenDto");
 
         // KAS DTOs
-        fory.register(RewrapRequestDto.class);
-        fory.register(RewrapRequestDto.UnsignedRewrapRequestDto.class);
-        fory.register(RewrapRequestDto.WithPolicyDto.class);
-        fory.register(RewrapRequestDto.WithKeyAccessObjectDto.class);
-        fory.register(RewrapRequestDto.WithPolicyRequestDto.class);
-        fory.register(RewrapResponseDto.class);
-        fory.register(RewrapResponseDto.PolicyRewrapResultDto.class);
-        fory.register(RewrapResponseDto.KeyAccessRewrapResultDto.class);
-        fory.register(PublicKeyResponseDto.class);
+        f.register(RewrapRequestDto.class, "io.opentdf.fory.dto.RewrapRequestDto");
+        f.register(RewrapRequestDto.UnsignedRewrapRequestDto.class, "io.opentdf.fory.dto.RewrapRequestDto$UnsignedRewrapRequestDto");
+        f.register(RewrapRequestDto.WithPolicyDto.class, "io.opentdf.fory.dto.RewrapRequestDto$WithPolicyDto");
+        f.register(RewrapRequestDto.WithKeyAccessObjectDto.class, "io.opentdf.fory.dto.RewrapRequestDto$WithKeyAccessObjectDto");
+        f.register(RewrapRequestDto.WithPolicyRequestDto.class, "io.opentdf.fory.dto.RewrapRequestDto$WithPolicyRequestDto");
+        f.register(RewrapResponseDto.class, "io.opentdf.fory.dto.RewrapResponseDto");
+        f.register(RewrapResponseDto.PolicyRewrapResultDto.class, "io.opentdf.fory.dto.RewrapResponseDto$PolicyRewrapResultDto");
+        f.register(RewrapResponseDto.KeyAccessRewrapResultDto.class, "io.opentdf.fory.dto.RewrapResponseDto$KeyAccessRewrapResultDto");
+        f.register(PublicKeyResponseDto.class, "io.opentdf.fory.dto.PublicKeyResponseDto");
 
         // Authorization DTOs
-        fory.register(ActionDto.class);
-        fory.register(ActionDto.StandardAction.class);
-        fory.register(ResourceDto.class);
-        fory.register(DecisionRequestDto.class);
-        fory.register(DecisionResponseDto.class);
-        fory.register(DecisionResponseDto.Decision.class);
-        fory.register(EntitlementsResponseDto.class);
-        fory.register(EntitlementsResponseDto.EntityEntitlementsDto.class);
+        f.register(ActionDto.class, "io.opentdf.fory.dto.ActionDto");
+        f.register(ResourceDto.class, "io.opentdf.fory.dto.ResourceDto");
+        f.register(DecisionRequestDto.class, "io.opentdf.fory.dto.DecisionRequestDto");
+        f.register(DecisionResponseDto.class, "io.opentdf.fory.dto.DecisionResponseDto");
+        f.register(EntitlementsResponseDto.class, "io.opentdf.fory.dto.EntitlementsResponseDto");
+        f.register(EntitlementsResponseDto.EntityEntitlementsDto.class, "io.opentdf.fory.dto.EntitlementsResponseDto$EntityEntitlementsDto");
 
         // Policy DTOs
-        fory.register(NamespaceDto.class);
-        fory.register(AttributeDto.class);
-        fory.register(AttributeDto.RuleType.class);
-        fory.register(ValueDto.class);
-        fory.register(SimpleKasKeyDto.class);
-        fory.register(SimpleKasKeyDto.Algorithm.class);
-        fory.register(SimpleKasKeyDto.SimpleKasPublicKeyDto.class);
+        f.register(NamespaceDto.class, "io.opentdf.fory.dto.NamespaceDto");
+        f.register(AttributeDto.class, "io.opentdf.fory.dto.AttributeDto");
+        f.register(ValueDto.class, "io.opentdf.fory.dto.ValueDto");
+        f.register(SimpleKasKeyDto.class, "io.opentdf.fory.dto.SimpleKasKeyDto");
+        f.register(SimpleKasKeyDto.SimpleKasPublicKeyDto.class, "io.opentdf.fory.dto.SimpleKasKeyDto$SimpleKasPublicKeyDto");
     }
 
     /**

@@ -1,5 +1,6 @@
 package io.opentdf.fory.dto;
 
+import org.apache.fory.annotation.ForyField;
 import java.util.Objects;
 
 /**
@@ -48,6 +49,7 @@ public final class EntityDto {
      * Claims data as JSON string (when entityType is CLAIMS).
      * Often null - Fory handles null efficiently.
      */
+    @ForyField(nullable = true)
     private String claims;
 
     /**

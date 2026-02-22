@@ -37,6 +37,11 @@ public class ForyCodec {
             builtFory = Fory.builder()
                     .withLanguage(Language.XLANG)
                     .requireClassRegistration(true)
+                    // Match Go Fory configuration
+                    .withCompatibleMode(CompatibleMode.COMPATIBLE)
+                    .withRefTracking(true)
+                    // Disable JIT codegen to avoid conflicts with FFM native calls
+                    .withCodegen(false)
                     .buildThreadSafeFory();
         } else {
             // Optimized JAVA mode for maximum performance
