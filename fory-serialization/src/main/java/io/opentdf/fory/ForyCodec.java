@@ -42,6 +42,9 @@ public class ForyCodec {
                     .withRefTracking(true)
                     // Disable JIT codegen to avoid conflicts with FFM native calls
                     .withCodegen(false)
+                    // Disable Guava serializers - we don't use Guava collections in DTOs
+                    // and they require runtime lambda generation incompatible with native-image
+                    .registerGuavaTypes(false)
                     .buildThreadSafeFory();
         } else {
             // Optimized JAVA mode for maximum performance
@@ -54,6 +57,8 @@ public class ForyCodec {
                     .withCodegen(true)
                     // Optimization: Disable reference tracking (no circular refs in DTOs)
                     .withRefTracking(false)
+                    // Disable Guava serializers for native-image compatibility
+                    .registerGuavaTypes(false)
                     .buildThreadSafeFory();
         }
 
