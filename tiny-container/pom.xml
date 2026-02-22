@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.opentdf.platform</groupId>
+        <artifactId>sdk-pom</artifactId>
+        <version>0.12.0</version>
+    </parent>
+
+    <artifactId>tiny-container</artifactId>
+    <packaging>jar</packaging>
+    <name>OpenTDF Tiny Container</name>
+    <description>Minimal service for scratch container deployment demo</description>
+
+    <!-- No dependencies - pure Java for minimal binary size -->
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>io.opentdf.tiny.TinyService</mainClass>
+                        </manifest>
+                    </archive>
+                    <finalName>tiny-service</finalName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

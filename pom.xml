@@ -302,6 +302,7 @@
                 <module>fory-serialization</module>
                 <module>benchmarks</module>
                 <module>ffm</module>
+                <module>tiny-container</module>
             </modules>
             <activation>
                 <activeByDefault>true</activeByDefault>
