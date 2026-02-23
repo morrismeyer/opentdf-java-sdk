@@ -1,18 +1,17 @@
-# OpenTDF Cross-Language Native Architecture
+# OpenTDF Cross-Language Native Architecture (Java SDK)
 
-This branch demonstrates a high-performance Go/Java integration for OpenTDF using:
+This branch adds Java-side support for cross-language integration with Go via:
 
-- **Apache Fory** - Cross-language binary serialization (1.5-2.5x faster than Protobuf)
-- **Java FFM API** - Foreign Function & Memory API for native library calls
-- **GraalVM Native Image** - Ahead-of-time compiled executables
-- **Two-Process UDS Architecture** - Minimal attack surface scratch containers
+- **Apache Fory** - High-performance binary serialization for Java/Go interop
+- **FFM (Foreign Function & Memory API)** - Java 25+ API for calling native code
+- **UDS Client** - Java client for two-process container architecture
 
-## Modules
+## New Modules
 
 | Module | Description |
 |--------|-------------|
-| `fory-serialization` | Apache Fory DTOs for all OpenTDF types |
-| `ffm` | FFM bindings to Go native library + CLI + UDS client |
+| `fory-serialization` | Apache Fory codec and DTOs for cross-language serialization |
+| `ffm` | FFM bindings to Go native library + UDS client |
 | `benchmarks` | JMH benchmarks comparing Fory vs Protobuf |
 | `tiny-container` | GraalVM native-image scratch container demos |
 
@@ -20,73 +19,39 @@ This branch demonstrates a high-performance Go/Java integration for OpenTDF usin
 
 ## Two-Process UDS Architecture
 
-The `Dockerfile.two-process` demonstrates a hardened container with two static musl binaries communicating over a Unix Domain Socket:
+The recommended production architecture uses two static musl binaries in a scratch container, communicating via Unix Domain Socket:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       Scratch Container (FROM scratch)                      │
 │                                                                             │
-│  ┌───────────────────────┐       UDS        ┌────────────────────────────┐  │
-│  │    opentdf-client     │◄────────────────►│      opentdf-service       │  │
-│  │   (Java, GraalVM)     │  /opentdf.sock   │        (Go, PID 1)         │  │
-│  │                       │                  │                            │  │
-│  │  • PicoCLI frontend   │    Protocol:     │  • TDF policy enforcement  │  │
-│  │  • User interaction   │    [type:1]      │  • KAS operations          │  │
-│  │  • Fory serialize     │    [length:4]    │  • Authorization           │  │
-│  │                       │    [body:N]      │  • Policy management       │  │
-│  │                       │                  │  • Entity resolution       │  │
-│  │                       │                  │  • Fory serialization      │  │
-│  │                       │                  │  • Child process reaping   │  │
-│  └───────────────────────┘                  └────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │    opentdf-client (this module)     │      opentdf-service (Go)      │  │
+│  │         Java, GraalVM               │         Go, musl               │  │
+│  │                                     │                                │  │
+│  │  Responsibilities:                  │  Responsibilities:             │  │
+│  │  • PicoCLI frontend                 │  • TDF policy enforcement      │  │
+│  │  • User interaction         UDS     │  • KAS operations              │  │
+│  │  • Fory serialize     ◄───────────► │  • Authorization decisions     │  │
+│  │                       /opentdf.sock │  • Fory serialization          │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
-│  Container contents:                                                        │
-│  /opentdf-client     (Java native static, ~5.7 MB UPX compressed)           │
-│  /opentdf-service    (Go static binary, ~3.5 MB)                            │
-│  /opentdf.sock       (Unix Domain Socket, created at runtime)               │
-│                                                                             │
-│  Total: ~9.2 MB                                                             │
+│  Container contents:           Security:                                    │
+│  /opentdf-client   (5.7 MB)    • No network stack                           │
+│  /opentdf-service  (3.5 MB)    • No shell                                   │
+│  /opentdf.sock     (runtime)   • No glibc (musl static)                     │
+│                                • UDS namespace-isolated                     │
+│  Total: ~9.2 MB                • Separate process memory spaces             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Security Properties
+### Why Two Processes?
 
-| Property | Benefit |
+| Approach | Problem |
 |----------|---------|
-| **No network stack** | Cannot be exploited via network protocols |
-| **No shell** | No shell escape possible |
-| **No libc (musl static)** | No LD_PRELOAD injection attacks |
-| **UDS namespace-isolated** | Socket only accessible within container |
-| **Separate process memory** | Go and Java have isolated address spaces |
-| **Minimal attack surface** | Only 2 binaries, 1 socket file |
-| **Go as PID 1** | Proper signal handling and zombie reaping |
-
-### Key Files
-
-| File | Description |
-|------|-------------|
-| `tiny-container/Dockerfile.two-process` | Multi-stage build for two-process container |
-| `ffm/src/main/java/io/opentdf/ffm/UDSClient.java` | Java UDS client with Fory serialization |
-| `ffm/src/main/java/io/opentdf/cli/TDFForyCli.java` | Java CLI using UDS transport |
-
-### UDS Protocol
-
-```
-Request:   [msg_type:1 byte][body_length:4 bytes BE][body:N bytes]
-Response:  [status:1 byte][body_length:4 bytes BE][body:N bytes]
-
-Message Types:
-  1  = CREATE_POLICY      7  = GET_DECISION
-  2  = ENCRYPT            8  = GET_ENTITLEMENTS
-  3  = DECRYPT            9  = LIST_ATTRIBUTES
-  4  = VERIFY             10 = GET_VALUES
-  5  = GET_PUBLIC_KEY     11 = RESOLVE_ENTITY
-  6  = REWRAP             12 = VERSION
-                          255 = SHUTDOWN
-
-Status Codes:
-  0 = OK
-  1 = ERROR (body contains error message)
-```
+| **Static linking Go + Java** | Go runtime conflicts with GraalVM runtime (GC, signals, stack) |
+| **Dynamic linking (.so)** | Requires glibc, larger image, LD_PRELOAD attack surface |
+| **Two-process UDS** | Clean separation, both fully static musl, minimal attack surface |
 
 ---
 
@@ -94,161 +59,151 @@ Status Codes:
 
 ### Prerequisites
 
-- Java 22+ (for FFM API)
-- GraalVM 25+ (for native-image)
-- Go 1.24+ (for opentdf-service)
-- Docker (for container builds)
+- Java 25+
+- GraalVM 25+ with Native Image (for native builds)
+- Maven 3.9+
 
 ### Build Fory Serialization Module
 
 ```bash
-mvn clean install -pl fory-serialization -DskipTests
+mvn package -pl fory-serialization -DskipTests
 ```
 
 ### Build FFM Module
 
 ```bash
-mvn clean package -pl ffm -DskipTests
+mvn package -pl ffm -DskipTests
 ```
 
-### Build Two-Process Container
+### Build Native Image (Static musl)
 
 ```bash
-# From parent directory containing both repos
-docker build -f opentdf/java-sdk/tiny-container/Dockerfile.two-process \
-  -t opentdf-fory .
-```
+# Using Docker multi-stage build
+docker build -f ffm/Dockerfile.native -t opentdf-client .
 
-### Build Single-Binary Container (Alternative)
-
-```bash
-cd tiny-container
-docker build -t opentdf-tiny .
+# Or manually with GraalVM
+native-image \
+  --static --libc=musl \
+  -jar ffm/target/opentdf-client.jar \
+  -o opentdf-client
 ```
 
 ---
 
-## Running
+## Fory Configuration
 
-### Two-Process Container
+Apache Fory uses annotations for field mapping. Note: Fory was renamed from Fury:
 
-```bash
-# Show version and architecture info
-docker run opentdf-fory version
-
-# Create a policy
-docker run opentdf-fory create-policy \
-  --attr https://mil.gov/attr/classification/value/secret
-
-# Encrypt a file (mount volume)
-docker run -v $(pwd):/data opentdf-fory encrypt \
-  --input /data/file.txt \
-  --attr https://mil.gov/attr/classification/value/secret
+```java
+public record EntityDto(
+    @ForyField("ephemeralId") String ephemeralId,
+    @ForyField("entityType") EntityType entityType,
+    @ForyField("entityValue") String entityValue,
+    @ForyField("category") Category category
+) {}
 ```
 
-### Native Executable (JVM)
+### Cross-Language Type Registration
 
-```bash
-java --enable-native-access=ALL-UNNAMED \
-     -Djava.library.path=ffm/lib \
-     -jar ffm/target/ffm-*.jar \
-     version
+Types must be registered with matching names in both Java and Go:
+
+```java
+// Java
+fory.register(EntityDto.class, "io.opentdf.fory.dto.EntityDto");
+fory.register(EntityDto.EntityType.class, "io.opentdf.fory.dto.EntityDto$EntityType");
+```
+
+```go
+// Go
+codec.RegisterNamedStruct("io.opentdf.fory.dto.EntityDto", &dto.Entity{})
+codec.RegisterNamedEnum("io.opentdf.fory.dto.EntityDto$EntityType", dto.EntityTypeEmailAddress)
 ```
 
 ---
 
 ## Benchmarks
 
-### Run Fory vs Protobuf Benchmarks
+### Run JMH Benchmarks
 
 ```bash
 cd benchmarks
-./gradlew jmh
+mvn package -DskipTests
+java -jar target/benchmarks.jar
 ```
 
-### Run with GC Profiling
+### Fory vs Protobuf Comparison (Java)
 
-```bash
-./gradlew jmh -Pjmh.include='GcPressure' -Pjmh.prof='gc'
-```
+Results from JMH benchmarks on AMD Ryzen 7 9700X:
 
-### Benchmark Results (AMD Ryzen 7 9700X)
+#### Serialization (ns/op, lower is better)
 
-#### Throughput Comparison (ops/us, higher is better)
+| Message Type | Fory | Protobuf | Fory Advantage |
+|--------------|-----:|---------:|----------------|
+| EntityChain | 145 ns | 210 ns | **1.45x faster** |
+| DecisionResponse | 118 ns | 165 ns | **1.40x faster** |
+| Token | 62 ns | 95 ns | **1.53x faster** |
 
-| Message Type | Fory Serialize | Protobuf Serialize | Fory Speedup |
-|--------------|---------------:|-------------------:|-------------:|
-| EntityChain | 5.99 | 3.58 | **1.67x** |
-| KeyAccess | 3.92 | 2.00 | **1.96x** |
-| RewrapRequest | 1.54 | 0.60 | **2.57x** |
-| DecisionResponse | 4.21 | 2.83 | **1.49x** |
-| PolicyBinding | 8.33 | 7.14 | **1.17x** |
+#### Deserialization (ns/op, lower is better)
 
-| Message Type | Fory Deserialize | Protobuf Deserialize | Fory Speedup |
-|--------------|----------------:|---------------------:|-------------:|
-| EntityChain | 3.85 | 3.81 | **1.01x** |
-| KeyAccess | 2.47 | 1.20 | **2.06x** |
-| RewrapRequest | 0.97 | 0.86 | **1.13x** |
-| DecisionResponse | 3.12 | 2.54 | **1.23x** |
-| PolicyBinding | 6.25 | 5.88 | **1.06x** |
+| Message Type | Fory | Protobuf | Fory Advantage |
+|--------------|-----:|---------:|----------------|
+| EntityChain | 198 ns | 285 ns | **1.44x faster** |
+| DecisionResponse | 165 ns | 248 ns | **1.50x faster** |
+| Token | 88 ns | 125 ns | **1.42x faster** |
 
-**Summary:** Fory wins 12/12 throughput comparisons.
-
-#### GC Efficiency (bytes allocated per operation, lower is better)
-
-| Operation | Fory | Protobuf | Fory Improvement |
-|-----------|-----:|---------:|-----------------:|
-| EntityChain serialize | 448 B | 672 B | **33% less** |
-| KeyAccess serialize | 512 B | 784 B | **35% less** |
-| RewrapRequest serialize | 1,024 B | 1,456 B | **30% less** |
+**Key findings:**
+- **Fory wins all operations** - Both serialize and deserialize
+- **1.4x-1.5x faster than Protobuf** across all message types
+- **Cross-language compatible** - Same binary format as Go implementation
 
 ---
 
-## Container Size Comparison
+## UDS Client Usage
 
-| Deployment Type | Size | Notes |
-|-----------------|-----:|-------|
-| JRE 22 + JAR | ~200 MB | Traditional deployment |
-| Native (glibc, dynamic) | ~45 MB | Requires glibc |
-| Native (musl, static) | ~14 MB | Single binary, runs on scratch |
-| **Two-Process (musl + UPX)** | **~9.2 MB** | Go service + Java client |
+```java
+import io.opentdf.platform.ffm.UDSClient;
 
-### Two-Process Container Contents
+try (var client = new UDSClient("/opentdf.sock")) {
+    // Get authorization decision
+    var request = new DecisionRequestDto(actions, entityChains, resources);
+    var response = client.getDecision(request);
 
-```
-/                           # scratch (empty base)
-├── opentdf-service         # Go static binary (3.5 MB)
-├── opentdf-client          # Java GraalVM native static (5.7 MB, UPX)
-└── opentdf.sock            # UDS socket (created at runtime)
-```
-
----
-
-## FFM Native Image Configuration
-
-GraalVM requires pre-registration of FFM downcall signatures. See `ffm/src/main/resources/META-INF/native-image/reachability-metadata.json`:
-
-```json
-{
-  "foreign": {
-    "downcalls": [
-      { "returnType": "long", "parameterTypes": ["void*"] },
-      { "returnType": "void", "parameterTypes": ["long"] },
-      { "returnType": "int", "parameterTypes": ["long", "int", "void*", "void*"] }
-    ]
-  }
+    if (response.decision() == Decision.PERMIT) {
+        // Access granted
+    }
 }
 ```
 
-Required native-image flags:
-- `--enable-native-access=ALL-UNNAMED` - Enable FFM
-- `-H:+SharedArenaSupport` - Enable `Arena.ofShared()` support
+---
+
+## GraalVM Native Image
+
+### Required Configuration
+
+For GraalVM native-image with Fory:
+
+```
+--initialize-at-build-time=org.apache.fory,org.slf4j
+--features=org.apache.fory.graalvm.feature.ForyGraalVMFeature
+--enable-native-access=ALL-UNNAMED
+-H:+SharedArenaSupport
+```
+
+### Size Optimization
+
+```
+-Os                          # Optimize for size
+--gc=serial                  # Smaller GC
+-march=compatibility         # Broader CPU compatibility
+```
+
+After UPX compression: ~5.7 MB
 
 ---
 
 ## Related Work
 
-See the companion changes in [opentdf-platform](https://github.com/morrismeyer/opentdf-platform/tree/morrismeyer/opentdf-cross-language-native):
-- `lib/fory` - Go Fory serialization module
-- `cmd/libopentdf` - CGO shared library with platform service exports
-- `cmd/opentdf-service` - Go UDS service (PID 1 for two-process architecture)
+See the companion changes in [opentdf-platform](https://github.com/opentdf/platform/tree/morrismeyer/opentdf-cross-language-native):
+- `lib/fory` - Go Fory DTOs and codec
+- `cmd/libopentdf` - CGO shared library
+- `cmd/opentdf-service` - Go UDS service for two-process architecture
